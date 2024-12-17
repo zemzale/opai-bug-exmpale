@@ -24,9 +24,6 @@ type ServerInterface interface {
 
 	// (GET /api/example)
 	GetApiExample(w http.ResponseWriter, r *http.Request)
-
-	// (GET /api/more)
-	GetApiMore(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -35,11 +32,6 @@ type Unimplemented struct{}
 
 // (GET /api/example)
 func (_ Unimplemented) GetApiExample(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// (GET /api/more)
-func (_ Unimplemented) GetApiMore(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -57,20 +49,6 @@ func (siw *ServerInterfaceWrapper) GetApiExample(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetApiExample(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetApiMore operation middleware
-func (siw *ServerInterfaceWrapper) GetApiMore(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetApiMore(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -196,9 +174,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/example", wrapper.GetApiExample)
 	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/api/more", wrapper.GetApiMore)
-	})
 
 	return r
 }
@@ -250,59 +225,11 @@ func (response GetApiExample404JSONResponse) VisitGetApiExampleResponse(w http.R
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetApiMoreRequestObject struct {
-}
-
-type GetApiMoreResponseObject interface {
-	VisitGetApiMoreResponse(w http.ResponseWriter) error
-}
-
-type GetApiMore200JSONResponse struct {
-	Message *string `json:"message,omitempty"`
-}
-
-func (response GetApiMore200JSONResponse) VisitGetApiMoreResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetApiMore400JSONResponse struct{ ErrorResponseJSONResponse }
-
-func (response GetApiMore400JSONResponse) VisitGetApiMoreResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetApiMore401JSONResponse ErrorResponse
-
-func (response GetApiMore401JSONResponse) VisitGetApiMoreResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetApiMore404JSONResponse ErrorResponse
-
-func (response GetApiMore404JSONResponse) VisitGetApiMoreResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
 	// (GET /api/example)
 	GetApiExample(ctx context.Context, request GetApiExampleRequestObject) (GetApiExampleResponseObject, error)
-
-	// (GET /api/more)
-	GetApiMore(ctx context.Context, request GetApiMoreRequestObject) (GetApiMoreResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -351,30 +278,6 @@ func (sh *strictHandler) GetApiExample(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetApiExampleResponseObject); ok {
 		if err := validResponse.VisitGetApiExampleResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetApiMore operation middleware
-func (sh *strictHandler) GetApiMore(w http.ResponseWriter, r *http.Request) {
-	var request GetApiMoreRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetApiMore(ctx, request.(GetApiMoreRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetApiMore")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetApiMoreResponseObject); ok {
-		if err := validResponse.VisitGetApiMoreResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
